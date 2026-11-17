@@ -47,7 +47,7 @@ export function CoverageDiagnostic({ summary }: { summary: CoverageSummary | nul
           <Metric testId="coverage-api" label="API records in scope" value={population.apiRecordsInCorridorMunicipalities} note={`${population.apiPagesRetrieved} pages`} />
         </CardContent>
       </Card>
-      <ConfirmedRevisionStatus />
+      <ConfirmedRevisionStatus summary={summary} />
       <Card>
         <CardHeader>
           <CardTitle>Warnings</CardTitle>
@@ -104,7 +104,7 @@ export function CoverageDiagnostic({ summary }: { summary: CoverageSummary | nul
   );
 }
 
-function ConfirmedRevisionStatus() {
+function ConfirmedRevisionStatus({ summary }: { summary: CoverageSummary }) {
   const [comparison, setComparison] = useState<ConfirmedCoverageComparison | null>(null);
   useEffect(() => {
     let sessionId: string;
@@ -124,10 +124,64 @@ function ConfirmedRevisionStatus() {
       setComparison(await response.json() as ConfirmedCoverageComparison);
     }).catch(() => undefined);
   }, []);
-  const text = comparison?.status === "confirmed"
-    ? `Confirmed revision ${comparison.revisionId?.slice(0, 12)}: ${comparison.confirmedPremiumWithin2Km} premium stations within 2 km and ${comparison.confirmedPremiumBetween2And5Km} from 2 to 5 km. Historical cached default remains ${comparison.historicalPremiumWithin2Km} and ${comparison.historicalPremiumBetween2And5Km}.`
+  const confirmed = comparison?.status === "confirmed" ? comparison.confirmed : null;
+  const historicalOutside = summary.population.premiumExplicit
+    - summary.population.premiumWithin2Km
+    - summary.population.premiumBetween2And5Km
+    - summary.population.premiumUngeolocated;
+  const text = confirmed
+    ? `Confirmed revision ${comparison?.revisionId?.slice(0, 12)} uses this session's Google Routes geometry. It is not the original Google Maps alternative, and it is not evidence of fuel in stock.`
     : "Confirmed route revision: unavailable for this browser session. The cached default counts were not substituted.";
-  return <p className="text-sm text-muted-foreground" data-testid="coverage-confirmed-status">{text}</p>;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cached default versus confirmed revision</CardTitle>
+        <CardDescription data-testid="coverage-confirmed-status">{text}</CardDescription>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <table className="w-full text-left text-sm" data-testid="coverage-comparison">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th className="py-2 pr-3">Metric</th>
+              <th className="py-2 pr-3">Cached default</th>
+              <th className="py-2">Confirmed revision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ComparisonRow label="Source" cached="cached_google_default_route" confirmed={confirmed?.sourceLabel ?? "Unavailable"} />
+            <ComparisonRow label="Route points" cached={summary.route.pointCount} confirmed={confirmed ? confirmed.pointCount : "Unavailable"} />
+            <ComparisonRow label="Route length" cached={kilometers(summary.route.distanceMeters)} confirmed={confirmed ? kilometers(confirmed.routeLengthMeters) : "Unavailable"} />
+            <ComparisonRow label="Brazilian segment" cached={kilometers(summary.route.brazilianLengthMeters)} confirmed={confirmed ? kilometers(confirmed.brazilianLengthMeters) : "Unavailable"} />
+            <ComparisonRow label="Premium within 2 km" cached={summary.population.premiumWithin2Km} confirmed={confirmed ? confirmed.premiumWithin2Km : "Unavailable"} />
+            <ComparisonRow label="Premium from 2 to 5 km" cached={summary.population.premiumBetween2And5Km} confirmed={confirmed ? confirmed.premiumBetween2And5Km : "Unavailable"} />
+            <ComparisonRow label="Premium outside 5 km" cached={historicalOutside} confirmed={confirmed ? confirmed.premiumOutside5Km : "Unavailable"} />
+            <ComparisonRow label="Premium without coordinates" cached={summary.population.premiumUngeolocated} confirmed={confirmed ? confirmed.premiumUngeolocated : "Unavailable"} />
+            <ComparisonRow label="Entered the 2 km band" cached="Historical screen" confirmed={confirmed ? confirmed.premiumEnteredWithin2Km : "Unavailable"} />
+            <ComparisonRow label="Left the 2 km band" cached="Historical screen" confirmed={confirmed ? confirmed.premiumLeftWithin2Km : "Unavailable"} />
+            <ComparisonRow label="Band changes" cached="Historical screen" confirmed={confirmed ? confirmed.premiumBandChanges : "Unavailable"} />
+            <ComparisonRow label="Gaps over 100 km" cached={summary.gapsOver100Km.length} confirmed={confirmed ? confirmed.gapsOver100Km.length : "Unavailable"} />
+          </tbody>
+        </table>
+        <p className="mt-3 text-xs text-muted-foreground">
+          ANP coordinates in this extract are unvalidated. Straight-line bands are not driving detours, opening hours, or current stock.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ComparisonRow({ label, cached, confirmed }: { label: string; cached: number | string; confirmed: number | string }) {
+  return (
+    <tr className="border-b border-border/70">
+      <td className="py-2 pr-3">{label}</td>
+      <td className="py-2 pr-3">{cached}</td>
+      <td className="py-2">{confirmed}</td>
+    </tr>
+  );
+}
+
+function kilometers(meters: number): string {
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 
 function Metric({ testId, label, value, note }: { testId: string; label: string; value: number | string; note: string }) {

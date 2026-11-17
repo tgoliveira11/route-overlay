@@ -6,12 +6,32 @@ import {
   selectAnalysisGeometry,
   type ConfirmedRouteRecord,
 } from "@/lib/route-overlay/confirmed-route-store";
-import { clipAtNearest, corridorBand, projectOntoPolyline } from "@/lib/route-overlay/stations/proximity";
-import type { CoverageSummary, StationObservation } from "@/lib/route-overlay/stations/types";
+import { clipAtNearest, corridorBand, projectOntoPolyline, routeLength } from "@/lib/route-overlay/stations/proximity";
+import { coverageGaps } from "@/lib/route-overlay/stations/report";
+import type { CoverageGap, CoverageSummary, StationObservation } from "@/lib/route-overlay/stations/types";
 import type { GeoPoint } from "@/lib/route-overlay/types";
 
 /** Phase 4 Jaguarão reference used to keep the Brazilian clip. */
 export const BRAZIL_BORDER_REFERENCE: GeoPoint = { latitude: -32.56, longitude: -53.37 };
+
+export interface ConfirmedRouteMetrics {
+  sourceLabel: "confirmed_google_routes_revision";
+  pointCount: number;
+  routeLengthMeters: number;
+  brazilianPointCount: number;
+  brazilianLengthMeters: number;
+  borderApproachMeters: number;
+  premiumWithin2Km: number;
+  premiumBetween2And5Km: number;
+  premiumOutside5Km: number;
+  premiumUngeolocated: number;
+  premiumEnteredWithin2Km: number;
+  premiumLeftWithin2Km: number;
+  premiumEnteredBetween2And5Km: number;
+  premiumLeftBetween2And5Km: number;
+  premiumBandChanges: number;
+  gapsOver100Km: CoverageGap[];
+}
 
 export interface ConfirmedCoverageComparison {
   status: "confirmed" | "unavailable";
@@ -21,23 +41,52 @@ export interface ConfirmedCoverageComparison {
   expiresAt: string | null;
   confirmedPremiumWithin2Km: number | null;
   confirmedPremiumBetween2And5Km: number | null;
+  confirmed: ConfirmedRouteMetrics | null;
   historicalLabel: "cached_google_default_route";
   historicalPremiumWithin2Km: number | null;
   historicalPremiumBetween2And5Km: number | null;
 }
 
+type CountedStation = {
+  premium: boolean;
+  location: GeoPoint | null;
+  band?: StationObservation["band"];
+};
+
 export function premiumBandCounts(
   route: GeoPoint[],
-  stations: Array<{ premium: boolean; location: GeoPoint | null }>,
+  stations: CountedStation[],
 ): { within2Km: number; between2And5Km: number } | null {
+  return measureConfirmedRoute(route, stations)?.counts ?? null;
+}
+
+export function measureConfirmedRoute(
+  route: GeoPoint[],
+  stations: CountedStation[],
+): { counts: { within2Km: number; between2And5Km: number }; metrics: ConfirmedRouteMetrics } | null {
   const clip = clipAtNearest(route, BRAZIL_BORDER_REFERENCE);
   if (!clip.reliable || clip.points.length < 2) {
     return null;
   }
   let within2Km = 0;
   let between2And5Km = 0;
+  let outside5Km = 0;
+  let ungeolocated = 0;
+  let enteredWithin2Km = 0;
+  let leftWithin2Km = 0;
+  let enteredBetween = 0;
+  let leftBetween = 0;
+  let bandChanges = 0;
+  const projected: Array<Pick<StationObservation, "premium" | "band" | "progressMeters">> = [];
   for (const station of stations) {
-    if (!station.premium || !station.location) {
+    if (!station.premium) {
+      continue;
+    }
+    if (!station.location) {
+      ungeolocated += 1;
+      if (station.band && station.band !== "ungeolocated") {
+        bandChanges += 1;
+      }
       continue;
     }
     const projection = projectOntoPolyline(station.location, clip.points);
@@ -46,9 +95,54 @@ export function premiumBandCounts(
       within2Km += 1;
     } else if (band === "2_5_km") {
       between2And5Km += 1;
+    } else if (band === "outside") {
+      outside5Km += 1;
+    } else {
+      ungeolocated += 1;
     }
+    if (station.band && station.band !== band) {
+      bandChanges += 1;
+    }
+    if (station.band && station.band !== "0_2_km" && band === "0_2_km") {
+      enteredWithin2Km += 1;
+    }
+    if (station.band === "0_2_km" && band !== "0_2_km") {
+      leftWithin2Km += 1;
+    }
+    if (station.band && station.band !== "2_5_km" && band === "2_5_km") {
+      enteredBetween += 1;
+    }
+    if (station.band === "2_5_km" && band !== "2_5_km") {
+      leftBetween += 1;
+    }
+    projected.push({
+      premium: true,
+      band,
+      progressMeters: projection?.progressMeters ?? null,
+    });
   }
-  return { within2Km, between2And5Km };
+  const brazilianLengthMeters = routeLength(clip.points);
+  return {
+    counts: { within2Km, between2And5Km },
+    metrics: {
+      sourceLabel: "confirmed_google_routes_revision",
+      pointCount: route.length,
+      routeLengthMeters: routeLength(route),
+      brazilianPointCount: clip.points.length,
+      brazilianLengthMeters,
+      borderApproachMeters: clip.approachMeters,
+      premiumWithin2Km: within2Km,
+      premiumBetween2And5Km: between2And5Km,
+      premiumOutside5Km: outside5Km,
+      premiumUngeolocated: ungeolocated,
+      premiumEnteredWithin2Km: enteredWithin2Km,
+      premiumLeftWithin2Km: leftWithin2Km,
+      premiumEnteredBetween2And5Km: enteredBetween,
+      premiumLeftBetween2And5Km: leftBetween,
+      premiumBandChanges: bandChanges,
+      gapsOver100Km: coverageGaps(projected, brazilianLengthMeters),
+    },
+  };
 }
 
 export function compareConfirmedCoverage(input: {
@@ -61,33 +155,28 @@ export function compareConfirmedCoverage(input: {
   const historicalPremiumWithin2Km = input.summary?.population.premiumWithin2Km ?? null;
   const historicalPremiumBetween2And5Km = input.summary?.population.premiumBetween2And5Km ?? null;
   const choice = selectAnalysisGeometry("confirmed_google", input.confirmed);
+  const unavailable = (reason: string, revisionId: string | null = null, expiresAt: string | null = null): ConfirmedCoverageComparison => ({
+    status: "unavailable",
+    reason,
+    cachedDefaultSubstituted: false,
+    revisionId,
+    expiresAt,
+    confirmedPremiumWithin2Km: null,
+    confirmedPremiumBetween2And5Km: null,
+    confirmed: null,
+    historicalLabel: "cached_google_default_route",
+    historicalPremiumWithin2Km,
+    historicalPremiumBetween2And5Km,
+  });
   if (choice.status !== "confirmed" || !choice.confirmed) {
-    return {
-      status: "unavailable",
-      reason: choice.reason,
-      cachedDefaultSubstituted: false,
-      revisionId: null,
-      expiresAt: null,
-      confirmedPremiumWithin2Km: null,
-      confirmedPremiumBetween2And5Km: null,
-      historicalLabel: "cached_google_default_route",
-      historicalPremiumWithin2Km,
-      historicalPremiumBetween2And5Km,
-    };
+    return unavailable(choice.reason);
   }
   if (!input.observations) {
-    return {
-      status: "unavailable",
-      reason: "The confirmed route is stored, but the local station observations are unavailable.",
-      cachedDefaultSubstituted: false,
-      revisionId: choice.confirmed.revisionId,
-      expiresAt: choice.confirmed.expiresAt,
-      confirmedPremiumWithin2Km: null,
-      confirmedPremiumBetween2And5Km: null,
-      historicalLabel: "cached_google_default_route",
-      historicalPremiumWithin2Km,
-      historicalPremiumBetween2And5Km,
-    };
+    return unavailable(
+      "The confirmed route is stored, but the local station observations are unavailable.",
+      choice.confirmed.revisionId,
+      choice.confirmed.expiresAt,
+    );
   }
   let decoded: GeoPoint[] = [];
   try {
@@ -95,29 +184,23 @@ export function compareConfirmedCoverage(input: {
   } catch {
     decoded = [];
   }
-  const counts = premiumBandCounts(decoded, input.observations);
-  if (!counts) {
-    return {
-      status: "unavailable",
-      reason: "The confirmed polyline does not reach the Brazilian border reference closely enough to count stations.",
-      cachedDefaultSubstituted: false,
-      revisionId: choice.confirmed.revisionId,
-      expiresAt: choice.confirmed.expiresAt,
-      confirmedPremiumWithin2Km: null,
-      confirmedPremiumBetween2And5Km: null,
-      historicalLabel: "cached_google_default_route",
-      historicalPremiumWithin2Km,
-      historicalPremiumBetween2And5Km,
-    };
+  const measured = measureConfirmedRoute(decoded, input.observations);
+  if (!measured) {
+    return unavailable(
+      "The confirmed polyline does not reach the Brazilian border reference closely enough to count stations.",
+      choice.confirmed.revisionId,
+      choice.confirmed.expiresAt,
+    );
   }
   return {
     status: "confirmed",
-    reason: "Counts use the confirmed Google revision for this session.",
+    reason: "Counts use the confirmed Google revision for this session. The cached default was not substituted.",
     cachedDefaultSubstituted: false,
     revisionId: choice.confirmed.revisionId,
     expiresAt: choice.confirmed.expiresAt,
-    confirmedPremiumWithin2Km: counts.within2Km,
-    confirmedPremiumBetween2And5Km: counts.between2And5Km,
+    confirmedPremiumWithin2Km: measured.counts.within2Km,
+    confirmedPremiumBetween2And5Km: measured.counts.between2And5Km,
+    confirmed: measured.metrics,
     historicalLabel: "cached_google_default_route",
     historicalPremiumWithin2Km,
     historicalPremiumBetween2And5Km,
