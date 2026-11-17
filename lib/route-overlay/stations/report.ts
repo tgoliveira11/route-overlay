@@ -72,7 +72,7 @@ export function flagCoordinatesFarFromSeat(
 }
 
 export function coverageGaps(
-  stations: StationObservation[],
+  stations: Array<Pick<StationObservation, "premium" | "band" | "progressMeters">>,
   routeLengthMeters: number,
   minimumGapMeters = 100_000,
 ): CoverageGap[] {

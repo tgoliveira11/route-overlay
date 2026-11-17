@@ -15,7 +15,7 @@ export function localDiagnosticRefusal(request: Request): string | null {
     || request.headers.get("x-forwarded-host")
     || request.headers.get("forwarded")
   ) {
-    return "Confirmed-route diagnostics accept only a direct loopback request.";
+    return "Confirmed-route diagnostics accept only a direct loopback request. A forwarding header was present.";
   }
   let hostname: string;
   try {
@@ -24,7 +24,7 @@ export function localDiagnosticRefusal(request: Request): string | null {
     return "Confirmed-route diagnostics accept only a direct loopback request.";
   }
   if (!LOOPBACK_HOSTS.has(hostname)) {
-    return "Confirmed-route diagnostics accept only a direct loopback request.";
+    return `Confirmed-route diagnostics accept only a direct loopback request. The request host was ${hostname || "empty"}.`;
   }
   return null;
 }
