@@ -97,3 +97,9 @@ A straight-line band does not predict the driving detour. Two nearby stations ad
 ## 20. Next recommended experiment
 
 Keep the next pair of calls for Torres and Pelotas, and store the via-route offset for every new comparison before interpreting a large extra distance.
+
+## Pull request
+
+Pull request: https://github.com/tgoliveira11/route-overlay/pull/5
+
+The branch commit that contains this report is rebased onto `main`. The verified `origin/main` SHA is the one observed after that merge.
