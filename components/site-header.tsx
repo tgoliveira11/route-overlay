@@ -29,6 +29,13 @@ export function SiteHeader() {
             Assisted plan
           </Link>
           <Link
+            href="/coverage"
+            data-testid="coverage-nav"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          >
+            Coverage
+          </Link>
+          <Link
             href="/report"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
