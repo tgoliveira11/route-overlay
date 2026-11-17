@@ -1,6 +1,11 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CoverageMap } from "@/components/coverage-map";
+import { confirmationSessionId } from "@/lib/route-overlay/confirmation-session";
+import type { ConfirmedCoverageComparison } from "@/lib/route-overlay/stations/confirmed-coverage";
 import type { CoverageSummary } from "@/lib/route-overlay/stations/types";
 
 export function CoverageDiagnostic({ summary }: { summary: CoverageSummary | null }) {
@@ -42,6 +47,7 @@ export function CoverageDiagnostic({ summary }: { summary: CoverageSummary | nul
           <Metric testId="coverage-api" label="API records in scope" value={population.apiRecordsInCorridorMunicipalities} note={`${population.apiPagesRetrieved} pages`} />
         </CardContent>
       </Card>
+      <ConfirmedRevisionStatus />
       <Card>
         <CardHeader>
           <CardTitle>Warnings</CardTitle>
@@ -96,6 +102,32 @@ export function CoverageDiagnostic({ summary }: { summary: CoverageSummary | nul
       </Card>
     </section>
   );
+}
+
+function ConfirmedRevisionStatus() {
+  const [comparison, setComparison] = useState<ConfirmedCoverageComparison | null>(null);
+  useEffect(() => {
+    let sessionId: string;
+    try {
+      sessionId = confirmationSessionId(window.sessionStorage, () => crypto.randomUUID());
+    } catch {
+      return;
+    }
+    void fetch("/api/stations/confirmed-coverage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    }).then(async (response) => {
+      if (!response.ok) {
+        return;
+      }
+      setComparison(await response.json() as ConfirmedCoverageComparison);
+    }).catch(() => undefined);
+  }, []);
+  const text = comparison?.status === "confirmed"
+    ? `Confirmed revision ${comparison.revisionId?.slice(0, 12)}: ${comparison.confirmedPremiumWithin2Km} premium stations within 2 km and ${comparison.confirmedPremiumBetween2And5Km} from 2 to 5 km. Historical cached default remains ${comparison.historicalPremiumWithin2Km} and ${comparison.historicalPremiumBetween2And5Km}.`
+    : "Confirmed route revision: unavailable for this browser session. The cached default counts were not substituted.";
+  return <p className="text-sm text-muted-foreground" data-testid="coverage-confirmed-status">{text}</p>;
 }
 
 function Metric({ testId, label, value, note }: { testId: string; label: string; value: number | string; note: string }) {

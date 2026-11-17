@@ -29,6 +29,7 @@ import {
   type ConfirmedItinerary,
   type PlanningSession,
 } from "@/lib/route-overlay/confirmation";
+import { confirmationSessionId } from "@/lib/route-overlay/confirmation-session";
 import {
   classifyFriction,
   emptyEffort,
@@ -343,6 +344,35 @@ export function AssistedPlanner() {
     saveSession(window.localStorage, session);
     setConfirmed(nextConfirmed);
     setMetrics(nextMetrics);
+    let sessionId: string;
+    try {
+      sessionId = confirmationSessionId(window.sessionStorage, () => crypto.randomUUID());
+    } catch {
+      setError("The confirmation stays in this browser. The local confirmed-geometry file was not written.");
+      return;
+    }
+    void fetch("/api/routes/confirmed-geometry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        confirmedAt: nextConfirmed.confirmedAt,
+        source: nextConfirmed.source,
+        synthetic: nextConfirmed.synthetic,
+        candidateId: nextConfirmed.candidateId,
+        label: nextConfirmed.label,
+        encodedPolyline: nextConfirmed.encodedPolyline,
+        distanceMeters: nextConfirmed.distanceMeters,
+        durationSeconds: nextConfirmed.durationSeconds,
+        routingRevision: nextConfirmed.routingRevision,
+      }),
+    }).then((response) => {
+      if (!response.ok) {
+        setError("The confirmation stays in this browser. The local confirmed-geometry file was not written.");
+      }
+    }).catch(() => {
+      setError("The confirmation stays in this browser. The local confirmed-geometry file was not written.");
+    });
   }
 
   function onAddWaypoint(event: FormEvent) {
