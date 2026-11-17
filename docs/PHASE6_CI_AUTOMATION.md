@@ -60,15 +60,24 @@ The repository does not declare an `engines` field. Next.js 15.5.29 accepts `^18
 
 https://github.com/tgoliveira11/route-overlay/blob/main/.github/workflows/ci.yml
 
-The Actions tab is https://github.com/tgoliveira11/route-overlay/actions/workflows/ci.yml. The first hosted run is recorded in section 7 after GitHub executes it.
+Actions workflow: https://github.com/tgoliveira11/route-overlay/actions/workflows/ci.yml
 
 ## 7. CI execution results
 
-Pending the first GitHub-hosted run. A locally green suite is not treated as evidence that this workflow runs on GitHub.
+First GitHub-hosted run:
+
+- URL: https://github.com/tgoliveira11/route-overlay/actions/runs/44183741048
+- Event: `pull_request` for https://github.com/tgoliveira11/route-overlay/pull/3
+- Head: `2d4a718e8be5c361db247930287de16cbae8b184`
+- Conclusion: success
+- Started: 2026-11-17T21:49:05Z
+- Finished: 2026-11-17T21:51:52Z
+
+The job `ci` passed typecheck, lint, unit tests, integration tests, Playwright Chromium, the production build, and `npm audit --omit=dev`. The failure-trace upload was skipped because Playwright passed. No Google API key was configured for the run.
 
 ## 8. Runtime and resource observations
 
-Pending the first hosted run. The job budget is 30 minutes on one `ubuntu-24.04` runner. There is no matrix.
+The successful job took 2 minutes 43 seconds on one `ubuntu-24.04` runner. The workflow budget is 30 minutes. There is no matrix. Node.js 24 was installed from the official setup action, and `npm ci` used the lockfile cache.
 
 ## 9. Branch protection findings
 
@@ -84,4 +93,6 @@ Before this phase, `main` required a linear history, enforced the rule for admin
 
 ## 11. Pull request and merged SHA
 
-Recorded after the pull request is opened and, if the gates pass, after the remote `main` SHA is verified.
+Pull request: https://github.com/tgoliveira11/route-overlay/pull/3
+
+The hosted success above validated `2d4a718e8be5c361db247930287de16cbae8b184`. This documentation update is a later commit on the same branch, so it receives its own Actions run before merge. `main` uses rebase, which assigns a new SHA. The verified `origin/main` SHA is the one reported after that merge, not a hash predicted in this file.
