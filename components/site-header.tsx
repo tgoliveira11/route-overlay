@@ -14,7 +14,7 @@ export function SiteHeader() {
             Local feasibility console
           </span>
         </Link>
-        <nav className="flex items-center gap-2 text-sm">
+        <nav className="flex flex-wrap items-center justify-end gap-2 text-sm">
           <Link
             href="/"
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
@@ -34,6 +34,13 @@ export function SiteHeader() {
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
           >
             Coverage
+          </Link>
+          <Link
+            href="/detours"
+            data-testid="detour-nav"
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+          >
+            Detours
           </Link>
           <Link
             href="/report"
