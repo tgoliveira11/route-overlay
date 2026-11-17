@@ -1,0 +1,95 @@
+# Offline quality checks. This workflow must not receive Google API keys or billing credentials.
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CI: "true"
+  ROUTE_OVERLAY_GOOGLE_API_ENABLED: "false"
+  GOOGLE_ROUTES_API_KEY: ""
+  ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED: "false"
+  GOOGLE_MAPS_JS_API_KEY: ""
+  ROUTE_OVERLAY_PLACES_ENABLED: "false"
+  GOOGLE_PLACES_API_KEY: ""
+  ROUTE_OVERLAY_LIVE_EXPERIMENT: "false"
+
+jobs:
+  quality:
+    name: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: npm ci
+
+      - name: Typecheck
+        timeout-minutes: 5
+        run: npm run typecheck
+
+      - name: Lint
+        timeout-minutes: 5
+        run: npm run lint
+
+      - name: Unit tests
+        timeout-minutes: 5
+        run: npm run test:unit
+
+      - name: Integration tests
+        timeout-minutes: 5
+        run: npm run test:integration
+
+      - name: Install Playwright Chromium
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright
+        timeout-minutes: 15
+        run: npm run test:e2e
+
+      - name: Upload Playwright failure traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        timeout-minutes: 3
+        with:
+          name: playwright-failure-traces
+          path: |
+            test-results
+            playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Production build
+        timeout-minutes: 10
+        run: npm run build
+
+      - name: Production dependency audit
+        timeout-minutes: 3
+        run: npm audit --omit=dev
