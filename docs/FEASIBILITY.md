@@ -132,3 +132,13 @@ The import, candidate, refinement, confirmation, and synthetic stop-planning pat
 10. The nested PostCSS 8.4.31 copy under Next.js was replaced with 8.5.33. The vulnerable minimatch 10.2.6 copies used by the lint and shadcn tooling were replaced with 11.0.8. The `shadcn` CLI was moved to devDependencies. Vitest moved from 3.2.4 to 3.2.7 inside its existing range. Details are in `docs/SECURITY_AUDIT.md`.
 11. Tinypool 1.1.1 and Vitest 3.2.7 remain inside advisory ranges that npm would clear only by installing Vitest 5.1.0. They are test-runner dependencies. The production audit after this phase reports no findings. `deepmerge` 4.3.1 remains on the shadcn CLI path. Next.js was not upgraded to 16 because the PostCSS finding was patched without that major upgrade.
 12. The assisted confirmation approach is worth continuing as a prototype. It is not yet a decision that users will accept the extra work, and it does not revive faithful import of the selected Google Maps alternative.
+
+## Live Routes, phase 4
+
+H1 and H2 above are unchanged. Faithful recovery of the alternative that was on screen remains **NO-GO**. This section records a different question: whether Google Routes can compute the recovered Santos–Montevideo stops, draw those polylines on an official Google map, and let a person confirm the polyline that was actually drawn.
+
+The experiment ran on 2026-11-16 from the local checkout on branch `feature/google-routes-live-validation`. Counts, labels, and screenshots are in `docs/REAL_ROUTES_EXPERIMENT.md` and `docs/PHASE4_TEST_RESULTS.md`. Six `computeRoutes` calls and two Maps JavaScript loads were made. The default unit and browser suites do not make those calls.
+
+**CONDITIONAL GO** for assisted reconstruction of a new Routes API itinerary.
+
+The direct Santos–Montevideo request returned three real alternatives. They rendered on a Google map. A Chuí waypoint and a Jaguarão waypoint each produced one route that passed within a few tens of meters of the requested coordinate. Confirmation was stored only after the selected polyline was on the map, and adding a waypoint cleared it. The original shared selection is still absent from the URL. A second direct request did not return the same three alternatives. Durations do not match the traffic-aware times in the earlier Maps screenshot, because these requests were `TRAFFIC_UNAWARE`. Exact road fidelity against the screenshot remains **UNVERIFIED**.

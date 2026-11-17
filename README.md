@@ -49,12 +49,12 @@ Open `/plan` and paste a directions URL.
 1. Import the URL. The page lists origin, destination, intermediate stops, preferences, what was recovered, and what is missing. The selected Maps alternative may be absent from the URL.
 2. Reconstruct with mock fixtures. Those corridors are synthetic. The Google Routes button stays disabled until `ROUTE_OVERLAY_GOOGLE_API_ENABLED=true` and a key are both set.
 3. Select a candidate, or add, remove, and reorder intermediate waypoints and press recalculate. Recalculation is explicit.
-4. Confirm the candidate. That stores version 1 of the planning session in this browser only. Confirmation does not set independently verified fidelity.
+4. Confirm the candidate. That stores version 2 of the planning session in this browser only. A live candidate stays disabled until its polyline has been drawn on a Google map. Confirmation does not set independently verified fidelity.
 5. After confirmation, generate a stop plan. The stations are labeled synthetic fixtures, not real businesses.
 
 Routes that already contain intermediate waypoints do not receive invented alternatives. The [Routes API](https://developers.google.com/maps/documentation/routes/compute_route_directions) does not return alternatives in that case, and this app does not pretend that it does.
 
-Live Routes geometry is not drawn on the schematic. Drawing Google route content on a non-Google basemap is outside the [Routes API policies](https://developers.google.com/maps/documentation/routes/policies). Compare the roads by opening the original Google Maps URL.
+Live Routes geometry is not drawn on the schematic. Drawing Google route content on a non-Google basemap is outside the [Routes API policies](https://developers.google.com/maps/documentation/routes/policies). When the Maps JavaScript display is enabled, the same polylines are drawn on a Google map. Switching candidates restyles that map and does not send another Routes request. Compare the roads with the original Google Maps URL. Phase 4 evidence is in `docs/REAL_ROUTES_EXPERIMENT.md`.
 
 ## Optional Google Routes API
 
@@ -65,7 +65,7 @@ ROUTE_OVERLAY_GOOGLE_API_ENABLED=true
 GOOGLE_ROUTES_API_KEY=your-key
 ```
 
-Restart `npm run dev`. The key stays on the server. Mock mode remains available and is still labeled mock. A live result is a new route computed from the recovered stops, not a replay of the shared selection.
+Restart `npm run dev`. The Routes key stays on the server. The Maps JavaScript key is a separate browser key and is the only key `/api/routes/status` may return. Mock mode remains available and is still labeled mock. A live result is a new route computed from the recovered stops, not a replay of the shared selection. The local process stops at 20 Routes calls and 30 map loads. `npm run test:live` does nothing unless `ROUTE_OVERLAY_LIVE_EXPERIMENT=true`.
 
 ## Tests
 
