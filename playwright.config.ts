@@ -27,5 +27,16 @@ export default defineConfig({
     url: e2eBaseUrl,
     reuseExistingServer: false,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      ...(process.env.ROUTE_OVERLAY_LIVE_EXPERIMENT === "true"
+        ? {}
+        : {
+            ROUTE_OVERLAY_GOOGLE_API_ENABLED: "false",
+            GOOGLE_ROUTES_API_KEY: "",
+            ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED: "false",
+            GOOGLE_MAPS_JS_API_KEY: "",
+          }),
+    },
   },
 });

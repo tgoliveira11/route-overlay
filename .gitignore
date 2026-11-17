@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Local workstation notes. May contain machine paths. Do not commit.
 /LOCAL.md
+
+# Local live-request counter and temporary Cloud command output.
+/.route-overlay/

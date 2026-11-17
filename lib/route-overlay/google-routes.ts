@@ -1,5 +1,9 @@
 import { diagnoseFidelity } from "@/lib/route-overlay/fidelity";
 import { formatCoordinate } from "@/lib/route-overlay/geo";
+import {
+  reserveLiveCall,
+  type LiveBudgetStore,
+} from "@/lib/route-overlay/live-budget";
 import type {
   GeoPoint,
   GoogleApiStatus,
@@ -162,6 +166,12 @@ export async function computeGoogleRoutes(
   options: {
     config: GoogleApiConfig;
     fetchImpl?: typeof fetch;
+    budgetStore?: LiveBudgetStore;
+    /**
+     * Count this call against the local cap. Defaults to real server calls
+     * outside Vitest. Mocked fetches in the default test suite do not count.
+     */
+    countLiveRequest?: boolean;
   },
 ): Promise<ReconstructionResult> {
   const status = googleApiStatus(options.config);
@@ -175,6 +185,19 @@ export async function computeGoogleRoutes(
         error: status.reason,
       },
     };
+  }
+
+  const countsTowardCap =
+    options.countLiveRequest ??
+    (!options.fetchImpl && process.env.VITEST !== "true");
+  if (countsTowardCap) {
+    const reservation = reserveLiveCall("computeRoutes", options.budgetStore);
+    if (!reservation.allowed) {
+      return failedLive(
+        status,
+        reservation.reason ?? "Local computeRoutes cap reached.",
+      );
+    }
   }
 
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -210,7 +233,10 @@ export async function computeGoogleRoutes(
   }
 
   if (!response.ok) {
-    const message = readGoogleError(payload) ?? `Google Routes returned HTTP ${response.status}.`;
+    const message = describeGoogleFailure(
+      response.status,
+      readGoogleError(payload) ?? `Google Routes returned HTTP ${response.status}.`,
+    );
     return failedLive(status, message);
   }
 
@@ -338,6 +364,21 @@ function readGoogleError(payload: unknown): string | null {
   const record = asRecord(payload);
   const error = asRecord(record.error);
   return typeof error.message === "string" ? error.message : null;
+}
+
+function describeGoogleFailure(httpStatus: number, message: string): string {
+  const normalized = message.toLowerCase();
+  if (httpStatus === 429 || normalized.includes("quota")) {
+    return `Google Routes quota error: ${message}`;
+  }
+  if (
+    normalized.includes("billing") ||
+    normalized.includes("permission_denied") ||
+    httpStatus === 403
+  ) {
+    return `Google Routes billing or permission error: ${message}`;
+  }
+  return message;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

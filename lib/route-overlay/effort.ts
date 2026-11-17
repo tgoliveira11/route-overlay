@@ -66,6 +66,20 @@ export function markConfirmed(metrics: EffortMetrics, now: string): EffortMetric
   };
 }
 
+/**
+ * A draft edit discards the confirmed geometry. The previous completion no
+ * longer describes the current itinerary.
+ */
+export function invalidateConfirmation(metrics: EffortMetrics): EffortMetrics {
+  return {
+    ...metrics,
+    confirmationCompletedAt: null,
+    confirmationMs: null,
+    immediatelyAccepted: null,
+    outcome: "in_progress",
+  };
+}
+
 export function markAbandoned(metrics: EffortMetrics): EffortMetrics {
   return {
     ...metrics,

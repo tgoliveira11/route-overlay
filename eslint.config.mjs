@@ -21,6 +21,7 @@ const eslintConfig = [
       "test-results/**",
       "playwright-report/**",
       "blob-report/**",
+      ".route-overlay/**",
     ],
   },
 ];

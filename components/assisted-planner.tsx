@@ -32,6 +32,7 @@ import {
 import {
   classifyFriction,
   emptyEffort,
+  invalidateConfirmation,
   markAbandoned,
   markConfirmationStarted,
   markConfirmed,
@@ -151,7 +152,7 @@ export function AssistedPlanner() {
     candidateConfirmable: Boolean(selected?.confirmable && selected.route.encodedPolyline),
   });
 
-  function persistClearedConfirmation() {
+  function persistClearedConfirmation(nextMetrics: EffortMetrics) {
     if (!imported) {
       clearSession(window.localStorage);
       return;
@@ -160,11 +161,14 @@ export function AssistedPlanner() {
       version: PLANNING_SESSION_VERSION,
       importedUrl: imported.parsed.inputUrl,
       confirmed: null,
-      metrics,
+      metrics: nextMetrics,
     });
   }
 
-  function discardGeometry(nextDraft: DraftWaypoint[]) {
+  function discardGeometry(
+    nextDraft: DraftWaypoint[],
+    nextMetrics: EffortMetrics = invalidateConfirmation(metrics),
+  ) {
     requestGeneration.current += 1;
     setDraft(nextDraft);
     setReconstruction(null);
@@ -174,7 +178,8 @@ export function AssistedPlanner() {
     setStopPlan(null);
     setMapsReady(false);
     setAwaitingRecalculation(true);
-    persistClearedConfirmation();
+    setMetrics(nextMetrics);
+    persistClearedConfirmation(nextMetrics);
   }
 
   async function onParse(event: FormEvent) {
@@ -347,13 +352,15 @@ export function AssistedPlanner() {
       setError(created.error);
       return;
     }
-    discardGeometry([...draft, created]);
+    discardGeometry(
+      [...draft, created],
+      invalidateConfirmation({
+        ...recordAction(metrics),
+        waypointsAdded: metrics.waypointsAdded + 1,
+      }),
+    );
     setWaypointInput("");
     setError(null);
-    setMetrics((current) => ({
-      ...recordAction(current),
-      waypointsAdded: current.waypointsAdded + 1,
-    }));
   }
 
   async function onRecalculate() {
@@ -361,7 +368,7 @@ export function AssistedPlanner() {
       ...current,
       recalculations: current.recalculations + 1,
     }));
-    await reconstruct("mock");
+    await reconstruct(liveAvailable ? "live" : "mock");
   }
 
   function onReset() {
@@ -561,16 +568,26 @@ export function AssistedPlanner() {
                 {reconstruction && !reconstruction.mock ? (
                   <div className="flex flex-col gap-2">
                     <p data-testid="plan-live-schematic-hidden">
-                      Live Google polylines are not drawn on this schematic. They can be drawn only on a
-                      Google map, and that display is disabled until the Maps JavaScript API is configured.
+                      Live Google polylines are not drawn on this schematic. They are drawn only on a
+                      Google map.
                     </p>
                     {mapsDisplayAvailable && status?.mapsJsKey ? (
                       <GoogleRouteMap
                         apiKey={status.mapsJsKey}
-                        encodedJoined={reconstruction.routes
-                          .map((route) => route.encodedPolyline)
-                          .filter((value): value is string => Boolean(value))
-                          .join("\n")}
+                        routes={reconstruction.routes.map((route) => ({
+                          id: route.id,
+                          label: route.label,
+                          encodedPolyline: route.encodedPolyline,
+                          distanceMeters: route.distanceMeters,
+                          durationSeconds: route.durationSeconds,
+                        }))}
+                        stops={reconstruction.mapStops.map((stop) => ({
+                          label: stop.label,
+                          role: stop.role,
+                          latitude: stop.location.latitude,
+                          longitude: stop.location.longitude,
+                        }))}
+                        selectedRouteId={selectedId}
                         onReady={setMapsReady}
                       />
                     ) : (

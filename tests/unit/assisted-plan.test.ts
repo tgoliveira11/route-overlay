@@ -9,7 +9,7 @@ import {
   saveSession,
   type KeyValueStore,
 } from "@/lib/route-overlay/confirmation";
-import { classifyFriction, emptyEffort, markConfirmed } from "@/lib/route-overlay/effort";
+import { classifyFriction, emptyEffort, invalidateConfirmation, markConfirmed } from "@/lib/route-overlay/effort";
 import { reconstructMock } from "@/lib/route-overlay/mock-reconstruct";
 import { parseMapsUrl } from "@/lib/route-overlay/parse-maps-url";
 import {
@@ -141,6 +141,11 @@ describe("confirmation and friction", () => {
       ),
     ).toBe("high");
     expect(classifyFriction({ ...started, outcome: "abandoned" })).toBe("high");
+    const completed = markConfirmed(started, "2026-11-16T18:00:00.000Z");
+    const invalidated = invalidateConfirmation(completed);
+    expect(invalidated.outcome).toBe("in_progress");
+    expect(invalidated.confirmationCompletedAt).toBeNull();
+    expect(classifyFriction(invalidated)).toBe("high");
   });
 });
 
