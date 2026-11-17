@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { POST as importPost } from "@/app/api/routes/import/route";
+import { POST as mapLoadPost } from "@/app/api/routes/map-load/route";
 import { POST as reconstructPost } from "@/app/api/routes/reconstruct/route";
 import { GET as statusGet } from "@/app/api/routes/status/route";
+import { MAX_MAP_LOADS } from "@/lib/route-overlay/live-budget";
 import { SAMPLES } from "@/lib/route-overlay/samples";
 import { importMapsUrl, reconstructFromUrl } from "@/lib/route-overlay/service";
 
@@ -11,6 +16,9 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   delete process.env.ROUTE_OVERLAY_GOOGLE_API_ENABLED;
   delete process.env.GOOGLE_ROUTES_API_KEY;
+  delete process.env.ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED;
+  delete process.env.GOOGLE_MAPS_JS_API_KEY;
+  delete process.env.ROUTE_OVERLAY_BUDGET_PATH;
 });
 
 describe("import route handler", () => {
@@ -172,6 +180,36 @@ describe("status route handler", () => {
     const body = await response.json();
     expect(body.liveAvailable).toBe(false);
     expect(body.reason).toMatch(/Mock reconstruction/i);
+    expect(body.mapsJsKey).toBeNull();
+  });
+
+  it("returns only the browser map key and never the Routes server key", async () => {
+    process.env.ROUTE_OVERLAY_GOOGLE_API_ENABLED = "true";
+    process.env.GOOGLE_ROUTES_API_KEY = "server-key-must-stay-hidden";
+    process.env.ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED = "true";
+    process.env.GOOGLE_MAPS_JS_API_KEY = "browser-key-for-maps-js";
+    const response = statusGet();
+    const body = await response.json();
+    expect(body.mapsDisplayAvailable).toBe(true);
+    expect(body.mapsJsKey).toBe("browser-key-for-maps-js");
+    expect(JSON.stringify(body)).not.toContain("server-key-must-stay-hidden");
+    delete process.env.ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED;
+    delete process.env.GOOGLE_MAPS_JS_API_KEY;
+  });
+});
+
+describe("map load budget", () => {
+  it("refuses map creation after the local cap", () => {
+    process.env.ROUTE_OVERLAY_BUDGET_PATH = path.join(
+      mkdtempSync(path.join(tmpdir(), "route-overlay-budget-")),
+      "budget.json",
+    );
+    for (let index = 0; index < MAX_MAP_LOADS; index += 1) {
+      expect(mapLoadPost().status).toBe(200);
+    }
+    const denied = mapLoadPost();
+    expect(denied.status).toBe(429);
+    delete process.env.ROUTE_OVERLAY_BUDGET_PATH;
   });
 });
 

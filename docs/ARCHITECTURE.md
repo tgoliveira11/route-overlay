@@ -16,7 +16,8 @@ RouteOverlay is a local Next.js App Router application. Domain logic lives in `l
 | Confirmation | `confirmation.ts` | Version 2 session in `localStorage` key `route-overlay.planning-session.v2`. The confirmed itinerary stores `routingRevision`. |
 | Effort counters | `effort.ts` | In-browser counts only. No analytics endpoint. |
 | Stop planning | `fuel-stations.ts`, `stop-plan.ts` | Synthetic stations with `synthetic: true`. |
-| HTTP | `app/api/routes/import`, `reconstruct`, `status` | The existing handlers. The planner calls them. |
+| HTTP | `app/api/routes/import`, `reconstruct`, `status`, `map-load` | The planner calls them. `map-load` reserves one intentional Google map load and returns no credentials. |
+| Live cap | `live-budget.ts` | Refuses the 21st `computeRoutes` call and the 31st map load. A refusal does not send the provider request. |
 | UI | `components/route-console.tsx`, `components/assisted-planner.tsx` | Diagnostics and assisted confirmation stay separate. |
 
 ## Reconstruction request
@@ -39,7 +40,7 @@ A live Routes polyline is stripped before it reaches the SVG. [Routes API polici
 
 The supported display is the [Maps JavaScript API](https://developers.google.com/maps/documentation/javascript/overview) polyline on a Google map, implemented in `components/google-route-map.tsx`. The component is mounted only when `ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED=true` and `GOOGLE_MAPS_JS_API_KEY` is non-empty. Both stay unset in `.env.example`. The key is returned by `/api/routes/status` only in that case, because the browser script needs it. Loading that script is a separate billable Maps JavaScript product. It is not enabled by the Routes API flag.
 
-Until that map reports ready, live confirmation is blocked. RouteOverlay does not draw a synthetic stand-in for a live polyline and does not describe an unseen live route as confirmed. Mock geometry can still be confirmed on the schematic, and it stays labeled mock.
+Until that map reports ready, live confirmation is blocked. The map reserves its load only for the draw that is still current, then restyles an existing polyline when the selected candidate changes. RouteOverlay does not draw a synthetic stand-in for a live polyline and does not describe an unseen live route as confirmed. A failed live request returns an error and zero routes. Mock geometry can still be confirmed on the schematic, and it stays labeled mock. Draft edits call `invalidateConfirmation`, so a previously completed confirmation does not remain the stored outcome. When live Routes is available, **Recalculate draft** uses the live provider. Otherwise it stays on the mock provider.
 
 ## Confirmation semantics
 

@@ -6,6 +6,8 @@ import {
   readGoogleApiConfig,
   redactSecrets,
 } from "@/lib/route-overlay/google-routes";
+import { memoryLiveBudgetStore } from "@/lib/route-overlay/live-budget";
+import { selectedPolylineRendered } from "@/lib/route-overlay/map-readiness";
 import { reconstructMock } from "@/lib/route-overlay/mock-reconstruct";
 import { parseMapsUrl } from "@/lib/route-overlay/parse-maps-url";
 import { SAMPLES } from "@/lib/route-overlay/samples";
@@ -134,5 +136,111 @@ describe("Google Routes client", () => {
     expect(redactSecrets("bad key super-secret-key in body", "super-secret-key")).toBe(
       "bad key [redacted] in body",
     );
+  });
+
+  it("keeps a single returned route and does not invent alternatives", async () => {
+    const result = await computeGoogleRoutes(parseMapsUrl(SAMPLES[1].url), {
+      config: { enabled: true, apiKey: "test-key" },
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            routes: [
+              {
+                distanceMeters: 80000,
+                duration: "5400s",
+                polyline: { encodedPolyline: "_p~iF~ps|U" },
+                routeLabels: ["DEFAULT_ROUTE"],
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+    });
+    expect(result.routes).toHaveLength(1);
+    expect(result.routes[0]?.label).toBe("Google default route");
+    expect(result.routes[0]?.encodedPolyline).toBe("_p~iF~ps|U");
+    expect(result.mock).toBe(false);
+  });
+
+  it("reports an empty Routes response without synthetic geometry", async () => {
+    const result = await computeGoogleRoutes(parseMapsUrl(SAMPLES[1].url), {
+      config: { enabled: true, apiKey: "test-key" },
+      fetchImpl: async () => new Response(JSON.stringify({ routes: [] }), { status: 200 }),
+    });
+    expect(result.routes).toHaveLength(0);
+    expect(result.geometryProvenance).toBe("none");
+    expect(result.googleApi.error).toMatch(/no routes/i);
+    expect(result.mock).toBe(false);
+  });
+
+  it("surfaces billing and quota failures and does not retry", async () => {
+    const billingFetch = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({
+          error: { code: 403, message: "Billing has not been enabled for this project.", status: "PERMISSION_DENIED" },
+        }),
+        { status: 403 },
+      ),
+    );
+    const billing = await computeGoogleRoutes(parseMapsUrl(SAMPLES[1].url), {
+      config: { enabled: true, apiKey: "test-key" },
+      fetchImpl: billingFetch,
+    });
+    expect(billingFetch).toHaveBeenCalledOnce();
+    expect(billing.routes).toHaveLength(0);
+    expect(billing.googleApi.error).toMatch(/billing or permission/i);
+    expect(billing.mock).toBe(false);
+
+    const quotaFetch = vi.fn<typeof fetch>(async () =>
+      new Response(JSON.stringify({ error: { message: "Quota exceeded for computeRoutes." } }), {
+        status: 429,
+      }),
+    );
+    const quota = await computeGoogleRoutes(parseMapsUrl(SAMPLES[1].url), {
+      config: { enabled: true, apiKey: "test-key" },
+      fetchImpl: quotaFetch,
+    });
+    expect(quotaFetch).toHaveBeenCalledOnce();
+    expect(quota.googleApi.error).toMatch(/quota error/i);
+    expect(quota.routes).toHaveLength(0);
+  });
+
+  it("stops before fetch when the local computeRoutes cap is exhausted", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const result = await computeGoogleRoutes(parseMapsUrl(SAMPLES[1].url), {
+      config: { enabled: true, apiKey: "test-key" },
+      fetchImpl,
+      countLiveRequest: true,
+      budgetStore: memoryLiveBudgetStore({ computeRoutesCalls: 20, mapLoads: 0 }),
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result.googleApi.error).toMatch(/20 computeRoutes/);
+    expect(result.routes).toHaveLength(0);
+  });
+});
+
+describe("map confirmation readiness", () => {
+  it("requires the selected polyline to be the one that was drawn", () => {
+    expect(
+      selectedPolylineRendered({
+        selectedPolyline: "abc",
+        renderedPolyline: "abc",
+        mapReportedReady: true,
+      }),
+    ).toBe(true);
+    expect(
+      selectedPolylineRendered({
+        selectedPolyline: "abc",
+        renderedPolyline: "other",
+        mapReportedReady: true,
+      }),
+    ).toBe(false);
+    expect(
+      selectedPolylineRendered({
+        selectedPolyline: "abc",
+        renderedPolyline: "abc",
+        mapReportedReady: false,
+      }),
+    ).toBe(false);
   });
 });

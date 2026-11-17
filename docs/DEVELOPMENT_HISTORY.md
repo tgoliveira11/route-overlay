@@ -101,3 +101,13 @@ Confirmed defects and the corrections:
 - Playwright used `reuseExistingServer: true` on port 3000. The suite now starts `npm run dev:e2e` on `127.0.0.1:3100` with `reuseExistingServer: false`. The existing production listener on port 3000 was not stopped.
 
 `npm audit` was read again and the lockfile was not changed by this pass. Production findings remain zero. The full tree still reports Vitest, tinypool, and `@vitest/mocker`. No paid Google API was called, and the Maps JavaScript display was not enabled.
+
+## Phase 4 — live Routes and Google map validation
+
+Continued on 2026-11-16 on branch `feature/google-routes-live-validation`, created from the sanitized root. No commit, push, merge, or deploy was made as part of this implementation.
+
+The Google Cloud project `tgoliveira11` already had `routes.googleapis.com` and `maps-backend.googleapis.com` enabled, along with other services that this phase did not enable and did not call. Two new restricted keys were created. Their values stay in the gitignored local environment. Project quotas were not changed. Monthly budget alerts of 1 BRL and 5 BRL were created for this project. They are alerts, not a spending cap. Details are in `docs/GOOGLE_CLOUD_CONFIGURATION.md`.
+
+The application now counts live `computeRoutes` calls and intentional map loads, refuses the call when the local cap is reached, and draws live polylines only on a Google map. Switching a candidate does not create another map. A draft edit clears the stored confirmation outcome. When live Routes is available, recalculation uses that provider instead of the mock provider.
+
+The bounded experiment used 6 of 20 Routes calls and 2 of 30 map loads. Results are in `docs/REAL_ROUTES_EXPERIMENT.md`. The earlier production listener on port 3000 was stopped so the updated application could bind to the only local origin allowed by the browser key. It was stopped again after the screenshots.

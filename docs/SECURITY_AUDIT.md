@@ -73,3 +73,13 @@ Rechecked on 2026-11-16 after the correctness fixes, without `npm audit fix` and
 `deepmerge` 4.3.1 and `shadcn` 4.23.0 are still installed as development dependencies. This audit invocation did not list them. Their earlier low finding, GHSA-gcqx-w48m-w2h4, is unchanged in the tree: application routes still do not import `deepmerge`. No advisory was suppressed.
 
 PostCSS remains overridden at 8.5.33. Next.js remains 15.5.29. No major framework upgrade was made. The two critical findings are still confined to the test runner. The running application is not that process, and `dev` and `start` still bind to `127.0.0.1`.
+
+## Phase 4 key handling
+
+Rechecked while configuring the live experiment. No key value is recorded in this file.
+
+- The Routes key is read only on the server from `GOOGLE_ROUTES_API_KEY`. It is not a `NEXT_PUBLIC_` variable. Reconstruction responses pass through redaction before they are parsed. `/api/routes/status` has no field for that key. A status check during the live run confirmed the response body did not contain it.
+- The Maps JavaScript key is a different key. `/api/routes/status` returns it only when map display is explicitly enabled, because the browser script cannot load without it.
+- The default Playwright server forces both flags off and both keys empty unless `ROUTE_OVERLAY_LIVE_EXPERIMENT=true`. The default Vitest include does not run `tests/live`.
+- The local cap refuses a provider request after 20 Routes calls or 30 map loads. There is no automatic retry.
+- An unrelated existing API key and an unrelated OAuth client on the same Google Cloud project were not modified.
