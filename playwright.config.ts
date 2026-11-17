@@ -37,6 +37,9 @@ export default defineConfig({
             ROUTE_OVERLAY_GOOGLE_MAPS_JS_ENABLED: "false",
             GOOGLE_MAPS_JS_API_KEY: "",
           }),
+      ROUTE_OVERLAY_PLACES_ENABLED: "false",
+      GOOGLE_PLACES_API_KEY: "",
+      ROUTE_OVERLAY_CONFIRMED_ROUTE_DIR: ".route-overlay/e2e-confirmed-routes",
     },
   },
 });
