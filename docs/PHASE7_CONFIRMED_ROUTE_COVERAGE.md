@@ -111,4 +111,6 @@ The encoded polyline is stored only in `.route-overlay/confirmed-routes/<session
 
 ## 11. Pull request and merged commit
 
-Recorded when the pull request is opened and again after `origin/main` is verified.
+Pull request: https://github.com/tgoliveira11/route-overlay/pull/4
+
+The branch commit that contains this report is rebased onto `main`. The verified `origin/main` SHA is the one observed after that merge.
